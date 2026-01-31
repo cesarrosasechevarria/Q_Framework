@@ -202,6 +202,134 @@ final class Status extends Controller
 }
 ```
 
+
+### Ejemplo completo de Controller
+
+Ejemplo de un controller típico que:
+- lista con **paginación PRO** (sin leer `page` manualmente),
+- crea un registro con validación simple,
+- devuelve JSON para endpoints API.
+
+```php
+<?php
+declare(strict_types=1);
+
+namespace App\Controllers;
+
+use System\Core\Controller;
+use System\Database\Crud\TableCrud;
+
+final class Usuarios extends Controller
+{
+    public function index()
+    {
+        // Listado con paginación PRO (lee automáticamente ?page=)
+        $qb = service('db')->table('usuarios')->orderBy('id', 'DESC');
+        $rows  = $qb->paginate(10);
+        $pager = $qb->pager();
+
+        return view('usuarios/index', [
+            'title' => 'Usuarios',
+            'rows'  => $rows,
+            'pager' => $pager,
+        ]);
+    }
+
+    public function store()
+    {
+        // Datos desde POST
+        $data = [
+            'nombres' => trim((string) $this->request->getPost('nombres')),
+            'email'   => trim((string) $this->request->getPost('email')),
+            'activo'  => (int) $this->request->getPost('activo', 1),
+        ];
+
+        // Validación mínima (puedes reemplazar por tu Validator/Rules)
+        $errors = [];
+        if ($data['nombres'] === '') $errors['nombres'] = 'Requerido';
+        if ($data['email'] === '' || !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+            $errors['email'] = 'Email inválido';
+        }
+
+        if ($errors) {
+            // Si es request JSON, responde JSON; si no, redirige con flash
+            if ($this->request->wantsJson()) {
+                return $this->response->json(['ok' => false, 'errors' => $errors], 422);
+            }
+            session()->setFlash('errors', $errors);
+            return $this->response->redirect(url('/usuarios/create'));
+        }
+
+        // CRUD PRO por tabla (sin crear un Model por entidad)
+        $crud = new TableCrud(service('db'), 'usuarios', [
+            'primaryKey'     => 'id',
+            'protectFields'  => true,
+            'allowedFields'  => ['nombres', 'email', 'activo'],
+            'useTimestamps'  => true,
+            'useSoftDeletes' => false,
+        ]);
+
+        $r = $crud->createResult($data);
+
+        if ($this->request->wantsJson()) {
+            return $this->response->json([
+                'ok'       => $r->ok,
+                'insertId' => $r->insertId ?? null,
+                'error'    => $r->error ?? null,
+            ], $r->ok ? 201 : 400);
+        }
+
+        if (!$r->ok) {
+            session()->setFlash('error', $r->error ?? 'No se pudo registrar');
+            return $this->response->redirect(url('/usuarios/create'));
+        }
+
+        session()->setFlash('success', 'Usuario registrado');
+        return $this->response->redirect(url('/usuarios'));
+    }
+
+    public function show($id)
+    {
+        // Endpoint JSON de ejemplo
+        $row = service('db')->table('usuarios')->where('id', (int)$id)->get()->getRowArray();
+        if (!$row) {
+            return $this->response->json(['ok' => false, 'error' => 'No encontrado'], 404);
+        }
+        return $this->response->json(['ok' => true, 'data' => $row]);
+    }
+}
+```
+
+Vista mínima `app/Views/usuarios/index.php`:
+
+```php
+<h1><?= esc($title) ?></h1>
+
+<table class="q_table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Nombres</th>
+      <th>Email</th>
+      <th>Activo</th>
+    </tr>
+  </thead>
+  <tbody>
+    <?php foreach ($rows as $r): ?>
+      <tr>
+        <td><?= (int) $r['id'] ?></td>
+        <td><?= esc($r['nombres']) ?></td>
+        <td><?= esc($r['email']) ?></td>
+        <td><?= (int) $r['activo'] ?></td>
+      </tr>
+    <?php endforeach; ?>
+  </tbody>
+</table>
+
+<?= $pager?->links() ?>
+```
+
+
 ### 3) Vistas
 
 ```php
