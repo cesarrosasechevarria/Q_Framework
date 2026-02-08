@@ -77,7 +77,7 @@ Framework PHP ligero y modular para construir aplicaciones web y APIs con un nú
 1) Clona el repo:
 
 ```bash
-git clone <tu-repo>
+git clone https://github.com/cesarrosasechevarria/Q_Framework.git
 cd Q_Framework
 ```
 
